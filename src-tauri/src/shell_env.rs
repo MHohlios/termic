@@ -321,6 +321,18 @@ pub(crate) fn fallback_path(current: &str) -> String {
         format!("{home}/.volta/bin"),
         format!("{home}/.npm-global/bin"),
         format!("{home}/n/bin"),
+        // Nix: per-user home-manager profile, nix-darwin/NixOS system
+        // profile, and the default profile. Normally added by the shell
+        // rc (/etc/zshrc or the user's own PATH setup), which is exactly
+        // what didn't run when we're in this fallback — without these,
+        // every nix-installed CLI is invisible to spawned agents.
+        format!(
+            "/etc/profiles/per-user/{}/bin",
+            std::env::var("USER").unwrap_or_default()
+        ),
+        format!("{home}/.nix-profile/bin"),
+        "/run/current-system/sw/bin".into(),
+        "/nix/var/nix/profiles/default/bin".into(),
     ];
 
     let mut seen: std::collections::HashSet<String> =
@@ -358,6 +370,27 @@ mod tests {
     fn fallback_path_preserves_original_entries_first() {
         let result = fallback_path("/usr/bin:/bin");
         assert!(result.starts_with("/usr/bin:/bin"), "original path must be at the start");
+    }
+
+    #[test]
+    fn fallback_path_adds_nix_profile_dirs() {
+        let result = fallback_path("/usr/bin:/bin");
+        assert!(
+            result.contains("/run/current-system/sw/bin"),
+            "must add nix-darwin system profile"
+        );
+        assert!(
+            result.contains("/nix/var/nix/profiles/default/bin"),
+            "must add nix default profile"
+        );
+        assert!(
+            result.contains("/.nix-profile/bin"),
+            "must add per-user nix profile"
+        );
+        assert!(
+            result.contains("/etc/profiles/per-user/"),
+            "must add per-user home-manager profile"
+        );
     }
 
     #[test]
